@@ -11,18 +11,26 @@ class Post(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name='posts'
-        )
+    )
     group = models.ForeignKey(
         'Group',
-        blank = True,
-        null = True,
-        on_delete = models.CASCADE
-        )
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='posts'
+    )
+
+    class Meta:
+        ordering = ['-pub_date']
+
+    def __str__(self) -> str:
+        return self.text
+
 
 class Group(models.Model):
-    title = models.CharField(max_length=30)
-    slug = models.SlugField()
-    descriptions = models.TextField()
-    
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(null=True, blank=True)
+
     def __str__(self) -> str:
         return self.title
