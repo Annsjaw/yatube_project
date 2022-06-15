@@ -10,5 +10,9 @@ class PostAdmin(admin.ModelAdmin):
     empty_value_display = '-пусто-'
 
 
+class GroupAdmin(admin.ModelAdmin):
+    list_display = ('title', 'description', 'slug')
+
+
 admin.site.register(Post, PostAdmin)
-admin.site.register(Group)
+admin.site.register(Group, GroupAdmin)

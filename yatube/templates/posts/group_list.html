@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
+{% block title %}
+  {{ group }}
+{% endblock %}
+{% block header %}
+  <h1>{{ group }}</h1>
+  <p>{{ group.description }}</p>
+{% endblock %}
 {% block content %}
-  <h1>{{ title }}</h1>
   {% for post in page_obj %}
     {% include 'includes/post_card.html'%}
     <a href={% url "posts:post_detail" post.id %}>подробная информация</a>
