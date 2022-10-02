@@ -11,7 +11,7 @@ def index(request):
     template = 'posts/index.html'
     context = {
         'page_obj': page_obj,
-        'posts': posts,  # Возможно не нужен
+        'posts': posts,  # FIXME Возможно не нужен
     }
     return render(request, template, context)
 
@@ -24,7 +24,7 @@ def group_posts(request, slug):
     context = {
         'page_obj': page_obj,
         'group': group,
-        'posts': posts,  # Посмотреть можно все получить через page_obj
+        'posts': posts,  # FIXME Посмотреть можно все получить через page_obj
     }
     return render(request, template, context)
 
@@ -35,9 +35,9 @@ def profile(request, username):
     posts = author.posts.select_related('author')
     page_obj = paginator(request, posts)
     context = {
-        'page_obj': page_obj,  # можно достать count из пагинатора page_obj.paginator.count
-        'posts': posts,  # Посты можно посчитать через Paginator
-        'username': username,  # Не используется в шаблоне
+        'page_obj': page_obj,  # FIXME можно посчитать page_obj.paginator.count
+        'posts': posts,  # FIXME Посты можно посчитать через Paginator
+        'username': username,  # FIXME Не используется в шаблоне
         'author': author,
     }
     return render(request, template, context)
@@ -73,7 +73,11 @@ def post_edit(request, post_id):
     post_data = get_object_or_404(Post, id=post_id)
     if request.user != post_data.author:
         return redirect('posts:post_detail', post_id)
-    form = PostForm(request.POST or None, instance=post_data)
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None,
+        instance=post_data
+    )
     if form.is_valid():
         form.save()
         return redirect('posts:post_detail', post_id)

@@ -1,7 +1,4 @@
-# X - Проверить статус страницы posts/<str:post_id>/edit/
-# X - Создать тесты на проверку template
-# X - Сделать рефакторинг для тестов на 200
-
+from http import HTTPStatus
 from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 from ..models import Post, Group
@@ -27,22 +24,27 @@ class PostsURLTests(TestCase):
         )
         cls.guest_client = Client()
         cls.authorized_client = Client()
-        cls.authorized_client.force_login(cls.user)  # Авторизация через созданного юзера
-        # Тестовый словарь для всех видов тестов
+        cls.authorized_client.force_login(cls.user)
         cls.url = {
-            'guest_client': {'/': 'posts/index.html',
-                             '/group/test-group-slug/': 'posts/group_list.html',
-                             '/profile/authorized_user/': 'posts/profile.html',
-                             f'/posts/{PostsURLTests.post.id}/': 'posts/post_detail.html',
-                             },
-            'authorized_client': {'/create/': 'posts/post_create.html',
-                                  f'/posts/{PostsURLTests.post.id}/edit/': 'posts/post_create.html',
-                                  },
+            'guest_client': {
+                '/': 'posts/index.html',
+                '/group/test-group-slug/': 'posts/group_list.html',
+                '/profile/authorized_user/': 'posts/profile.html',
+                f'/posts/{cls.post.id}/': 'posts/post_detail.html',
+            },
+            'authorized_client': {
+                '/create/': 'posts/post_create.html',
+                f'/posts/{cls.post.id}/edit/': 'posts/post_create.html',
+            },
         }
 
     def test_guest_url_code_404(self):
         response = self.guest_client.get('/unexisting_page/')
-        self.assertEqual(response.status_code, 404, 'Статус несуществующей страницы не равен 404')
+        self.assertEqual(
+            response.status_code,
+            HTTPStatus.NOT_FOUND,
+            'Статус несуществующей страницы не равен 404'
+        )
 
     def test_urls_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -53,7 +55,7 @@ class PostsURLTests(TestCase):
                     self.assertTemplateUsed(
                         response,
                         template,
-                        f'Шаблон {template} не соответствует шаблону по адресу {path}'
+                        f'Шаблон {template} не соответствует адресу {path}'
                     )
 
     def test_urls_code_200(self):
@@ -61,6 +63,9 @@ class PostsURLTests(TestCase):
         for user, urls in self.url.items():
             for path in urls.keys():
                 with self.subTest(path=path):
-                    # getattr получает данные главного класса и подставляет нужный аргумент
                     response = getattr(self, user).get(path)
-                    self.assertEqual(response.status_code, 200, f'Статус код страницы {path} не равен 200')
+                    self.assertEqual(
+                        response.status_code,
+                        HTTPStatus.OK,
+                        f'Статус код страницы {path} не равен 200'
+                    )

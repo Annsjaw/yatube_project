@@ -1,3 +1,4 @@
+from http import HTTPStatus
 from django.test import TestCase, Client
 
 
@@ -11,11 +12,14 @@ class AboutPagesURLTest(TestCase):
         }
 
     def test_about_url_status_code(self):
-        """Проверка доступности адресов статичный страниц"""
+        """Проверка доступности адресов статичных страниц"""
         for path in self.url.keys():
             with self.subTest(path=path):
                 response = self.guest_client.get(path)
-                self.assertEqual(response.status_code, 200, f'Статус код страницы {path} не равен 200')
+                self.assertEqual(response.status_code,
+                                 HTTPStatus.OK,
+                                 f'Статус код страницы {path} не равен 200'
+                                 )
 
     def test_about_url_uses_correct_template(self):
         """Проверка шаблонов для адресов статичных страниц"""
@@ -25,5 +29,5 @@ class AboutPagesURLTest(TestCase):
                 self.assertTemplateUsed(
                     response,
                     template,
-                    f'Шаблон страницы {path} не соответствует шаблону {template}'
+                    f'Шаблон страницы {path} не соответствует {template}'
                 )

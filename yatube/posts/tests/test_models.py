@@ -33,7 +33,26 @@ class PostModelTests(TestCase):
         }
         for value, expected in field_verbose.items():
             with self.subTest(value=value):
-                self.assertEqual(post._meta.get_field(value).verbose_name, expected, 'Ошибка в verbose_name')
+                self.assertEqual(
+                    post._meta.get_field(value).verbose_name,
+                    expected,
+                    'Ошибка в verbose_name'
+                )
+
+    def test_help_text(self):
+        """Help text в полях совпадает с ожидаемым."""
+        post = PostModelTests.post
+        field_help_text = {
+            'text': 'Текст нового поста',
+            'group': 'Группа, к которой будет относиться пост',
+        }
+        for value, expected in field_help_text.items():
+            with self.subTest(value=value):
+                self.assertEqual(
+                    post._meta.get_field(value).help_text,
+                    expected,
+                    'Ошибка в help_text'
+                )
 
     def test_models_have_correct_object_names(self):
         """Проверяем, что у моделей корректно работает __str__"""
@@ -45,4 +64,7 @@ class PostModelTests(TestCase):
         }
         for value, expected in expected_object_name.items():
             with self.subTest(value=value):
-                self.assertEqual(expected, str(value), 'Ошибка в методе __str__')
+                self.assertEqual(expected,
+                                 str(value),
+                                 'Ошибка в методе __str__'
+                                 )
