@@ -1,12 +1,15 @@
 import shutil
 import tempfile
-from django.contrib.auth import get_user_model
-from django.test import TestCase, Client, override_settings
-from django.conf import settings
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.urls import reverse
+
 from django import forms as django_forms
-from ..models import Post, Group
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
+from django.urls import reverse
+
+from ..models import Comment, Follow, Group, Post
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -47,13 +50,12 @@ class PostsPagesTests(TestCase):
             content_type='image/gif',
         )
         cls.post = []
-        for x in range(15):
+        for x in range(15):  # FIXME разобраться и прикрутить bulk_create
             new_post = Post.objects.create(text=f'Тестовый текст поста {x}',
                                            author=cls.user,
                                            group=cls.group,
                                            image=cls.uploaded,
                                            )
-            # Insert добавляет в запись в начало начиная с 0
             cls.post.insert(0, new_post)
         cls.form_fields = {
             'text': django_forms.fields.CharField,
@@ -189,6 +191,16 @@ class PostsPagesTests(TestCase):
                 form_field = response.context['form'].fields[value]
                 self.assertIsInstance(form_field, expected)
 
+    def test_cache_index_page(self):
+        """После удаления поста он остается до очистки кеша"""
+        response1 = self.authorized_client.get(reverse('posts:index'))
+        Post.objects.create(text='qwerty', author=self.user)
+        response2 = self.authorized_client.get(reverse('posts:index'))
+        self.assertEqual(response1.content, response2.content)
+        cache.clear()
+        response3 = self.authorized_client.get(reverse('posts:index'))
+        self.assertNotEqual(response3.content, response2.content)
+
 
 class PaginatorViewsTest(TestCase):
     @classmethod
@@ -215,6 +227,11 @@ class PaginatorViewsTest(TestCase):
             reverse('posts:profile', kwargs={'username': cls.user}),
         }
 
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
     def test_paginator_first_page(self):
         """Количество постов на первой странице равно 10"""
         for page_name in self.templates_page_names:
@@ -233,3 +250,132 @@ class PaginatorViewsTest(TestCase):
                 len(response.context['page_obj'].object_list),
                 5,
             )
+
+
+class FollowTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user_1 = User.objects.create_user(username='auth_user_1')
+        cls.user_2 = User.objects.create_user(username='auth_user_2')
+        cls.user_3 = User.objects.create_user(username='auth_user_3')
+        cls.guest_client = Client()
+        cls.user_2_client = Client()
+        cls.user_2_client.force_login(cls.user_2)
+        cls.user_1_client = Client()
+        cls.user_1_client.force_login(cls.user_1)
+        cls.post = []
+        for x in range(3):
+            new_post = Post.objects.create(text=f'Тестовый текст поста {x}',
+                                           author=cls.user_1,
+                                           )
+            cls.post.insert(0, new_post)
+        Follow.objects.create(user=cls.user_2, author=cls.user_3)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
+    def test_auth_user_2_following_user_1(self):
+        """Юзер 2 подписался на юзера 1"""
+        followers_count = Follow.objects.count()
+        self.user_2_client.get(
+            reverse('posts:profile_follow', kwargs={'username': self.user_1}),
+            follow=True
+        )
+        self.assertEqual(Follow.objects.count(), followers_count + 1)
+
+    def test_auth_user_3_unfollowing_user_1(self):
+        """Юзер 1 отписался от юзера 3"""
+        followers_count = Follow.objects.count()
+        self.user_2_client.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.user_3}
+                    ),
+            follow=True
+        )
+        self.assertEqual(Follow.objects.count(), followers_count - 1)
+
+    def test_guest_user_following_user_1(self):
+        """Гость подписался на юзера 1"""
+        followers_count = Follow.objects.count()
+        self.guest_client.get(
+            reverse('posts:profile_follow', kwargs={'username': self.user_1}),
+            follow=True
+        )
+        self.assertEqual(Follow.objects.count(), followers_count)
+
+    def test_guest_user_unfollowing_user_1(self):
+        """Гость отписался от юзера 1"""
+        followers_count = Follow.objects.count()
+        self.guest_client.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.user_1}
+                    ),
+            follow=True
+        )
+        self.assertEqual(Follow.objects.count(), followers_count)
+
+    def test_folowers_see_new_post(self):
+        """Подписчик видит новый пост избранного автора,
+         а другой пользователь нет"""
+        resp_u2_before = self.user_2_client.get(reverse('posts:follow_index'))
+        obj_user_2_before = resp_u2_before.context['page_obj']
+        post_count_user_2_before = obj_user_2_before.paginator.count
+        resp_u1_before = self.user_1_client.get(reverse('posts:follow_index'))
+        obj_user_1_before = resp_u1_before.context['page_obj']
+        post_count_user_1_before = obj_user_1_before.paginator.count
+        Post.objects.create(text='Текст поста Usera 3',
+                            author=self.user_3,
+                            )
+        resp_u2_after = self.user_2_client.get(reverse('posts:follow_index'))
+        obj_user_2_after = resp_u2_after.context['page_obj']
+        post_count_user_2_after = obj_user_2_after.paginator.count
+        resp_u1_after = self.user_1_client.get(reverse('posts:follow_index'))
+        obj_user_1_after = resp_u1_after.context['page_obj']
+        post_count_user_1_after = obj_user_1_after.paginator.count
+
+        self.assertEqual(
+            post_count_user_2_after,
+            post_count_user_2_before + 1,
+            'Пост не добавился у подписчика')
+        self.assertEqual(
+            post_count_user_1_after,
+            post_count_user_1_before,
+            'Посты не должны добавляться если не подписан на автора')
+
+
+class CommentTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.creator = User.objects.create_user(username='creator')
+        cls.commentator = User.objects.create_user(username='commentator')
+        cls.guest_client = Client()
+        cls.commentator_client = Client()
+        cls.commentator_client.force_login(cls.commentator)
+        cls.post = Post.objects.create(text='Тестовый текст поста',
+                                       author=cls.creator
+                                       )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
+    def test_comment_appears_on_page(self):
+        """Комментарий появился на странице поста post_detail"""
+        Comment.objects.create(post_id=self.post.id,
+                               author=self.commentator,
+                               text='Тестовый коммент'
+                               )
+        response = self.guest_client.get(
+            reverse('posts:post_detail', kwargs={'post_id': self.post.id}))
+        comments = {
+            response.context['comments'][0].text: 'Тестовый коммент',
+            response.context['comments'][0].author: self.commentator,
+        }
+        for value, expected in comments.items():
+            self.assertEqual(value, expected)
+        self.assertTrue(response.context['form'], 'форма не отображается')

@@ -1,14 +1,14 @@
 import shutil
 import tempfile
+from http import HTTPStatus
 
-from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from posts.forms import PostForm
-from posts.models import Post, Group
-from http import HTTPStatus
+from posts.models import Comment, Group, Post
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -160,3 +160,53 @@ class PostFormTest(TestCase):
         self.assertRedirects(
             response_get, '/auth/login/?next=%2Fposts%2F1%2Fedit%2F'
         )
+
+
+class CommentFormTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(username='authorized_user')
+        cls.guest_client = Client()
+        cls.authorized_client = Client()
+        cls.authorized_client.force_login(cls.user)
+        cls.post = Post.objects.create(text='Тестовый текст поста',
+                                       author=cls.user,
+                                       )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
+    def test_add_comment_auth_user(self):
+        """Авторизованный пользователь может комментировать и
+        редирект работает исправно"""
+        comment_count = Comment.objects.count()
+        form_data = {
+            'text': 'Тестовый комментарий'
+        }
+        response = self.authorized_client.post(
+            reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
+            data=form_data,
+            follow=True
+        )
+        self.assertEqual(Comment.objects.count(), comment_count + 1)
+        self.assertRedirects(
+            response,
+            reverse('posts:post_detail', kwargs={'post_id': self.post.id}),
+            HTTPStatus.FOUND,
+        )
+
+    def test_add_comment_guest_user(self):
+        """Авторизованный пользователь не может комментировать"""
+        comment_count = Comment.objects.count()
+        form_data = {
+            'text': 'Тестовый комментарий'
+        }
+        self.guest_client.post(
+            reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
+            data=form_data,
+            follow=True
+        )
+        self.assertEqual(Comment.objects.count(), comment_count)

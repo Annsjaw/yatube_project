@@ -149,3 +149,11 @@ CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
 # Создание папки media и направление всех медиафайлов в нее
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
+
+# Подключаем бэкэнд кеширование.
+# Этот бэкенд годится для разработки, а на боевом сервере обычно используют Memcached или Redis.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
